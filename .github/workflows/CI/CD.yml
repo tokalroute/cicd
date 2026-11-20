@@ -1,0 +1,82 @@
+name: Multi-Stage MLOps CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # STAGE 1: Shift-Left Code Quality & Linting
+  shift-left-lint:
+    name: 1. Shift-Left Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Ruff Linter
+        run: |
+          pip install ruff
+          ruff check app.py
+
+  # STAGE 2: Shift-Left Automated Unit & Guardrail Tests
+  shift-left-unit-tests:
+    name: 2. Shift-Left Unit Tests
+    needs: shift-left-lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Unit & Guardrail Tests
+        run: python -m unittest -v app.py
+
+  # STAGE 3: Build Immutable Release Package
+  build-immutable-artifact:
+    name: 3. Build Immutable Release
+    needs: shift-left-unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Package Versioned Artifact
+        run: |
+          mkdir -p dist
+          tar -czf dist/mlops-model-${{ github.sha }}.tar.gz app.py
+          echo "Created Immutable Release: mlops-model-${{ github.sha }}.tar.gz"
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: immutable-model-${{ github.sha }}
+          path: dist/
+
+  # STAGE 4: Canary Progressive Delivery Simulation
+  canary-progressive-deploy:
+    name: 4. Canary Rollout (5% -> 100%)
+    needs: build-immutable-artifact
+    runs-on: ubuntu-latest
+    env:
+      MODEL_VERSION: "v2.0-${{ github.sha }}"
+    steps:
+      - name: Download Immutable Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: immutable-model-${{ github.sha }}
+
+      - name: Extract & Run Canary Rollout
+        run: |
+          tar -xzf mlops-model-${{ github.sha }}.tar.gz
+          python app.py --canary
