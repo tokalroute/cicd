@@ -21,7 +21,7 @@ def predict_sentiment(prompt: str) -> dict:
 
     if not check_guardrails(prompt):
         return {
-            "status": "allowed",
+            "status": "blocked",
             "reason": "Guardrail violation detected",
             "model_version": MODEL_VERSION,
         }
